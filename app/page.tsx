@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { useWaitForTransactionReceipt, useWriteContract, UseWriteContractParameters } from 'wagmi';
+import { useAppKitAccount } from "@reown/appkit/react";
+import { useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { transformForOnchain, Proof, verifyProof } from '@reclaimprotocol/js-sdk';
 
 import {
@@ -13,8 +13,6 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import {
-  AccountBalanceWallet as WalletIcon,
-  FitnessCenter as ActivityIcon,
   EmojiEvents as TrophyIcon,
   Person as UserIcon,
   Leaderboard as LeaderboardIcon,
@@ -307,7 +305,7 @@ const darkTheme = createTheme({
   },
 });
 
-const StyledCard = styled(Card)(({ theme }) => ({
+const StyledCard = styled(Card)(() => ({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
@@ -320,15 +318,14 @@ export default function Main() {
   const [parsedProofs, setParsedProofs] = useState<ParsedProofs | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prizePool, setPrizePool] = useState(0);
-  const [loading, setLoading] = useState(false);
 
-  const { open, close } = useAppKit();
-  const { address, isConnected, caipAddress, status } = useAppKitAccount();
+  const { address, isConnected } = useAppKitAccount();
   const { data: hash, isPending, writeContractAsync } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   });
-
+  
+  console.log(isConfirmed)
   // Derived state
   const walletConnected = isConnected;
   const whoopConnected = proofObject !== null;
@@ -387,7 +384,7 @@ export default function Main() {
     }
   };
 
-  const handleProofsError = (error: any) => {
+  const handleProofsError = (error: Error) => {
     console.error('Error in ReclaimProof:', error);
     setError('An error occurred during verification. Please try again.');
   };
@@ -449,7 +446,7 @@ export default function Main() {
                 <CardContent>
                   <Box display="flex" alignItems="center" mb={2}>
                     <TrophyIcon sx={{ mr: 1, color: 'warning.main' }} />
-                    <Typography variant="h6">This Week's Tournament</Typography>
+                    <Typography variant="h6">This Weeks Tournament</Typography>
                   </Box>
                   <Typography variant="h4" gutterBottom color="primary">
                     ${prizePool}

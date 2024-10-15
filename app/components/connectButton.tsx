@@ -1,11 +1,10 @@
 // components/ReclaimProof.tsx or ReclaimProof.jsx
 
 import React, { useState } from 'react';
-import { ReclaimProofRequest, verifyProof, transformForOnchain, Proof } from '@reclaimprotocol/js-sdk';
+import { ReclaimProofRequest, Proof } from '@reclaimprotocol/js-sdk';
 import QRCode from "react-qr-code";
 import { Modal, Box, Button, Typography, CircularProgress } from '@mui/material';
 import { FitnessCenter as ActivityIcon } from '@mui/icons-material';
-import { ParsedProofs, Parameters, ReclaimProofProps } from '../Interfaces'
 
 
 function ReclaimProof({
@@ -14,7 +13,7 @@ function ReclaimProof({
   userAddress,
 }: {
   onProofs: (proof: Proof) => void;
-  onError: (error: any) => void;
+  onError: (error: Error) => void;
   userAddress: string;
 }) {
   const [requestUrl, setRequestUrl] = useState('');
@@ -99,7 +98,7 @@ function ReclaimProof({
           onProofs(proof);
           handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
           console.error('Verification failed', error);
           setLocalError('Verification failed. Please try again.');
           if (onError) onError(error);
@@ -111,7 +110,6 @@ function ReclaimProof({
     } catch (error) {
       console.error('Initialization failed', error);
       setLocalError('Initialization failed. Please try again.');
-      if (onError) onError(error);
     } finally {
       setLoading(false);
     }
