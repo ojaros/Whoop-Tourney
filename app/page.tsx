@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { transformForOnchain, Proof, verifyProof } from '@reclaimprotocol/js-sdk';
@@ -21,238 +22,12 @@ import {
 import './page.css';
 
 import { ParsedProofs } from './Interfaces';
+import { parseEther } from 'viem'
+
+import contractABI from './contractABI';
 import ReclaimProof from './components/connectButton';
 
 const contractAddress = "0x627aD108f1C876F94eCaF01280c93a8e03F055C3"
-const contractABI = [
-	{
-		"inputs": [],
-		"name": "determineWinner",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_reclaimAddress",
-				"type": "address"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "constructor"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "user",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "recoveryScore",
-				"type": "uint256"
-			}
-		],
-		"name": "ProofVerified",
-		"type": "event"
-	},
-	{
-		"inputs": [
-			{
-				"components": [
-					{
-						"components": [
-							{
-								"internalType": "string",
-								"name": "provider",
-								"type": "string"
-							},
-							{
-								"internalType": "string",
-								"name": "parameters",
-								"type": "string"
-							},
-							{
-								"internalType": "string",
-								"name": "context",
-								"type": "string"
-							}
-						],
-						"internalType": "struct Claims.ClaimInfo",
-						"name": "claimInfo",
-						"type": "tuple"
-					},
-					{
-						"components": [
-							{
-								"components": [
-									{
-										"internalType": "bytes32",
-										"name": "identifier",
-										"type": "bytes32"
-									},
-									{
-										"internalType": "address",
-										"name": "owner",
-										"type": "address"
-									},
-									{
-										"internalType": "uint32",
-										"name": "timestampS",
-										"type": "uint32"
-									},
-									{
-										"internalType": "uint32",
-										"name": "epoch",
-										"type": "uint32"
-									}
-								],
-								"internalType": "struct Claims.CompleteClaimData",
-								"name": "claim",
-								"type": "tuple"
-							},
-							{
-								"internalType": "bytes[]",
-								"name": "signatures",
-								"type": "bytes[]"
-							}
-						],
-						"internalType": "struct Claims.SignedClaim",
-						"name": "signedClaim",
-						"type": "tuple"
-					}
-				],
-				"internalType": "struct Reclaim.Proof",
-				"name": "proof",
-				"type": "tuple"
-			},
-			{
-				"internalType": "uint256",
-				"name": "recoveryScore",
-				"type": "uint256"
-			}
-		],
-		"name": "verifyProof",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "winner",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "prizeAmount",
-				"type": "uint256"
-			}
-		],
-		"name": "WinnerDeclared",
-		"type": "event"
-	},
-	{
-		"inputs": [],
-		"name": "entryFee",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "getParticipants",
-		"outputs": [
-			{
-				"internalType": "address[]",
-				"name": "",
-				"type": "address[]"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "owner",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"name": "participants",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "reclaimAddress",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"name": "recoveryScores",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
-]
 
 
 interface User {
@@ -390,18 +165,22 @@ export default function Main() {
   };
 
   async function verifyAndJoinTournament() {
-    if (!proofObject) return;
+    if (!proofObject || !parsedProofs) return;
 
     try {
       // Transform the proof for on-chain use
       const proofData = transformForOnchain(proofObject);
+  
+      // Extract the recovery score from parsedProofs
+      const recoveryScore = Number(parsedProofs.recovery_score);
 
       // Call writeContract with the transformed proofData
       const data = await writeContractAsync({
         address: contractAddress,
         abi: contractABI,
         functionName: 'verifyProof',
-        args: [proofData],
+        args: [proofData, recoveryScore],
+        value: parseEther('0.01')
       });
 
       console.log('Transaction submitted:', data);
@@ -422,9 +201,7 @@ export default function Main() {
             <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
               Whoop Tourney
             </Typography>
-{/* 
-            <w3m-button />
-            <w3m-network-button /> */}
+
             <WalletButton />
 
             {/* ReclaimProof component */}

@@ -6,7 +6,6 @@ import QRCode from "react-qr-code";
 import { Modal, Box, Button, Typography, CircularProgress } from '@mui/material';
 import { FitnessCenter as ActivityIcon } from '@mui/icons-material';
 
-
 function ReclaimProof({
   onProofs,
   onError,
@@ -52,48 +51,6 @@ function ReclaimProof({
         onSuccess: (proof: Proof) => { // Use Proof type as per SDK
 
           console.log('Verification success', proof);
-          // console.log('Type of claimData:', typeof proof.claimData);
-          // console.log('claimData:', proof.claimData);
-
-          // // Ensure claimData is an object
-          // if (typeof proof.claimData !== 'object' || proof.claimData === null) {
-          //   console.error('claimData is not a valid object:', proof.claimData);
-          //   setLocalError('Invalid claim data format.');
-          //   if (onError) onError(new Error('Invalid claim data format.'));
-          //   return;
-          // }
-
-          // // Parse parameters
-          // let parameters: Parameters;
-          // try {
-          //   parameters = JSON.parse(proof.claimData.parameters);
-          //   console.log('Params : ', parameters)
-          // } catch (parseError) {
-          //   console.error('Failed to parse parameters:', parseError);
-          //   setLocalError('Failed to parse verification data.');
-          //   if (onError) onError(parseError);
-          //   return;
-          // }
-
-          // // Extract paramValues
-          // const paramValues = parameters.paramValues;
-          // if (!paramValues) {
-          //   console.error('paramValues not found in parameters:', parameters);
-          //   setLocalError('paramValues not found in parameters.');
-          //   if (onError) onError(new Error('paramValues not found in parameters.'));
-          //   return;
-          // }
-
-          // console.log("Param values: ", paramValues)
-
-          // const { hrv, recovery_score, sleep_score, user_id } = paramValues;
-
-          // const parsedProofs: ParsedProofs = {
-          //   hrv,
-          //   recovery_score,
-          //   sleep_score,
-          //   user_id
-          // };
 
           onProofs(proof);
           handleClose();

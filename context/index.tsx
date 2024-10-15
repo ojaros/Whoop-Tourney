@@ -18,7 +18,7 @@ if (!projectId) {
 const metadata = {
   name: 'Verifiable Whoop',
   description: 'Whoop tourney',
-  url: 'https://reown.com/appkit', // origin must match your domain & subdomain
+  url: 'https://whoop-tourney.vercel.app/', // origin must match your domain & subdomain
   icons: ['https://assets.reown.com/reown-profile-pic.png'],
 };
 
