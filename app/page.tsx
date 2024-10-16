@@ -180,7 +180,7 @@ export default function Main() {
         abi: contractABI,
         functionName: 'verifyProof',
         args: [proofData, recoveryScore],
-        value: parseEther('0.01')
+        value: parseEther('0.0006')
       });
 
       console.log('Transaction submitted:', data);
