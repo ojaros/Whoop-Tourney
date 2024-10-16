@@ -1,15 +1,17 @@
+// Main.tsx (or your component file)
 'use client';
 
 import React, { useState, useEffect } from 'react';
 
 import { useAppKitAccount } from "@reown/appkit/react";
-import { useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { useWaitForTransactionReceipt, useWriteContract, useReadContract, useReadContracts, useBalance } from 'wagmi';
 import { transformForOnchain, Proof, verifyProof } from '@reclaimprotocol/js-sdk';
+import { parseEther } from 'viem';
 
 import {
   AppBar, Toolbar, Typography, Button, Card, CardContent,
   Table, TableBody, TableCell, TableHead, TableRow, Avatar,
-  LinearProgress, Box, Container, Grid, Paper, Chip,
+  LinearProgress, Box, Container, Grid, Paper, Chip, CircularProgress,
   ThemeProvider, createTheme
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -22,20 +24,18 @@ import {
 import './page.css';
 
 import { ParsedProofs } from './Interfaces';
-import { parseEther } from 'viem'
-
 import contractABI from './contractABI';
 import ReclaimProof from './components/connectButton';
 
-const contractAddress = "0x627aD108f1C876F94eCaF01280c93a8e03F055C3"
+import type { Abi } from 'abitype'; // Correct import from 'abitype'
 
+const contractAddress: `0x${string}` = "0x627aD108f1C876F94eCaF01280c93a8e03F055C3"; // Ensure address matches the template
 
-interface User {
-  id: number;
-  name: string;
+// Define Participant interface matching the on-chain data
+interface Participant {
+  address: string;
   recoveryScore: number;
   entered: boolean;
-  avatar: string;
 }
 
 const darkTheme = createTheme({
@@ -88,32 +88,114 @@ const StyledCard = styled(Card)(() => ({
 }));
 
 export default function Main() {
-  const [users, setUsers] = useState<User[]>([]);
   const [proofObject, setProofObject] = useState<Proof | null>(null);
   const [parsedProofs, setParsedProofs] = useState<ParsedProofs | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prizePool, setPrizePool] = useState(0);
+  const [participantsData, setParticipantsData] = useState<Participant[]>([]);
 
   const { address, isConnected } = useAppKitAccount();
   const { data: hash, isPending, writeContractAsync } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash,
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
+
+  const { data: contractBalance, isError: isBalanceError, isLoading: isBalanceLoading } = useBalance({
+    address: contractAddress,
   });
-  
-  console.log(isConfirmed)
+
+  useEffect(() => {
+    if (contractBalance) {
+      // Convert balance from wei to ETH
+      const balanceInEth = parseFloat(contractBalance.formatted);
+      setPrizePool(balanceInEth);
+      console.log('Contract Balance (ETH):', balanceInEth);
+    }
+  }, [contractBalance]);
+
+  // Fetch participant addresses using typed ABI
+  const {
+    data: participantAddresses,
+    isError: isParticipantsError,
+    isLoading: isParticipantsLoading,
+  } = useReadContract({
+    address: contractAddress,
+    abi: contractABI as Abi, // Type assertion to ensure Abi type
+    functionName: 'getParticipants',
+  });
+
+  useEffect(() => {
+    console.log('Participant Addresses:', participantAddresses);
+  }, [participantAddresses]);
+
+  // Fetch recovery scores for each participant
+  const {
+    data: recoveryScoresData,
+    isError: isRecoveryScoresError,
+    isLoading: isRecoveryScoresLoading,
+  } = useReadContracts({
+    contracts: Array.isArray(participantAddresses)
+      ? participantAddresses.map((participantAddress: string) => ({
+        address: contractAddress,
+        abi: contractABI as Abi, // Type assertion to ensure Abi type
+        functionName: 'recoveryScores',
+        args: [participantAddress],
+      }))
+      : [],
+  });
+
+  useEffect(() => {
+    console.log('Recovery Scores Data:', recoveryScoresData);
+  }, [recoveryScoresData]);
+
+  // Combine participant addresses and recovery scores
+  useEffect(() => {
+    if (
+      Array.isArray(participantAddresses) &&
+      Array.isArray(recoveryScoresData) &&
+      participantAddresses.length === recoveryScoresData.length
+    ) {
+      const participants: Participant[] = participantAddresses.map((participantAddress: string, index: number) => {
+        const scoreData = recoveryScoresData[index];
+        let recoveryScore = 0;
+
+        if (scoreData && scoreData.status === 'success') {
+          // Convert BigInt to Number
+          recoveryScore = Number(scoreData.result);
+
+          // Optional: Check for NaN after conversion
+          if (isNaN(recoveryScore)) {
+            console.warn(`Invalid recovery score for address ${participantAddress}:`, scoreData.result);
+            recoveryScore = 0; // Assign a default value or handle as needed
+          }
+        } else {
+          console.warn(`Failed to fetch recovery score for address ${participantAddress}:`, scoreData);
+        }
+
+        return {
+          address: participantAddress,
+          recoveryScore: recoveryScore,
+          entered: true,
+        };
+      });
+
+      setParticipantsData(participants);
+
+      console.log('Mapped Participants Data:', participants);
+
+      // Update prize pool based on number of participants
+      setPrizePool(participants.length * 1); // Adjust based on your entry fee logic
+    }
+  }, [participantAddresses, recoveryScoresData]);
+
   // Derived state
   const walletConnected = isConnected;
   const whoopConnected = proofObject !== null;
   const canJoinTournament = whoopConnected && walletConnected;
 
-  useEffect(() => {
-    setPrizePool(users.filter((u) => u.entered).length * 5);
-  }, [users]);
-
   function WalletButton() {
     return <w3m-button></w3m-button>;
   }
 
+  // Handle proofs from ReclaimProof component
   const handleProofs = (proof: Proof) => {
     setProofObject(proof);
 
@@ -124,6 +206,8 @@ export default function Main() {
       // Parse parameters from the proof
       const parameters = JSON.parse(proof.claimData.parameters);
       const paramValues = parameters.paramValues;
+
+      console.log("param values: ", paramValues)
 
       const { hrv, recovery_score, sleep_score, user_id } = paramValues;
 
@@ -136,26 +220,10 @@ export default function Main() {
 
       setParsedProofs(newParsedProofs);
 
-      // Create or update the user
-      const updatedUser = {
-        id: users.length + 1,
-        name: address || 'Unknown',
-        recoveryScore: Number(newParsedProofs.recovery_score),
-        entered: true,
-        avatar: '/your-avatar-placeholder.svg', // Replace with actual avatar link
-      };
-
-      setUsers((prevUsers) => {
-        const existingUser = prevUsers.find((user) => user.name === updatedUser.name);
-        if (existingUser) {
-          return prevUsers.map((user) => (user.name === updatedUser.name ? updatedUser : user));
-        }
-        return [...prevUsers, updatedUser];
-      });
+      console.log('Parsed Proofs:', newParsedProofs);
     } catch (error) {
       console.error('Error parsing proof:', error);
       setError('An error occurred while processing the proof.');
-      // if (onError) onError(error);
     }
   };
 
@@ -164,34 +232,29 @@ export default function Main() {
     setError('An error occurred during verification. Please try again.');
   };
 
+  // Function to join the tournament by verifying the proof and sending the entry fee
   async function verifyAndJoinTournament() {
     if (!proofObject || !parsedProofs) return;
 
     try {
-      // Transform the proof for on-chain use
       const proofData = transformForOnchain(proofObject);
-  
-      // Extract the recovery score from parsedProofs
       const recoveryScore = Number(parsedProofs.recovery_score);
 
-      // Call writeContract with the transformed proofData
       const data = await writeContractAsync({
         address: contractAddress,
-        abi: contractABI,
+        abi: contractABI as Abi, // Type assertion to ensure Abi type
         functionName: 'verifyProof',
         args: [proofData, recoveryScore],
-        value: parseEther('0.0006')
+        value: parseEther('0.0006'), // Correct entry fee in ETH
       });
 
       console.log('Transaction submitted:', data);
-
       alert(`User entered the tournament!`);
     } catch (error) {
       console.error('Verification failed:', error);
       setError('Failed to join the tournament. Please try again.');
     }
   }
-
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -205,43 +268,49 @@ export default function Main() {
             <WalletButton />
 
             {/* ReclaimProof component */}
-            {address &&
+            {address && (
               <ReclaimProof
                 onProofs={handleProofs}
                 onError={handleProofsError}
                 userAddress={address}
               />
-            }
-
+            )}
           </Toolbar>
         </AppBar>
 
         <Container maxWidth="lg" sx={{ mt: 4 }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <StyledCard>
-                <CardContent>
-                  <Box display="flex" alignItems="center" mb={2}>
-                    <TrophyIcon sx={{ mr: 1, color: 'warning.main' }} />
-                    <Typography variant="h6">This Weeks Tournament</Typography>
-                  </Box>
-                  <Typography variant="h4" gutterBottom color="primary">
-                    ${prizePool}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Prize Pool
-                  </Typography>
-                  <LinearProgress
-                    variant="determinate"
-                    value={prizePool}
-                    sx={{ mt: 2, mb: 1 }}
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Entry fee: 0.003 ETH (approx. $5)
-                  </Typography>
-                </CardContent>
-              </StyledCard>
-            </Grid>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <StyledCard>
+                  <CardContent>
+                    <Box display="flex" alignItems="center" mb={2}>
+                      <TrophyIcon sx={{ mr: 1, color: 'warning.main' }} />
+                      <Typography variant="h6">This Weeks Tournament</Typography>
+                    </Box>
+                    <Typography variant="h4" gutterBottom color="primary">
+                      {isBalanceLoading ? (
+                        <CircularProgress size={24} />
+                      ) : isBalanceError ? (
+                        'Error fetching balance'
+                      ) : (
+                        `${contractBalance?.formatted} ETH`
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Prize Pool
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={prizePool}
+                      sx={{ mt: 2, mb: 1 }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Entry fee: 0.0006 ETH (approx. $1)
+                    </Typography>
+                  </CardContent>
+                </StyledCard>
+              </Grid>
 
             <Grid item xs={12} md={6}>
               <StyledCard>
@@ -276,7 +345,6 @@ export default function Main() {
                   ) : (
                     <Typography color="text.secondary">Connect your Whoop account to see your stats</Typography>
                   )}
-
                 </CardContent>
               </StyledCard>
             </Grid>
@@ -292,12 +360,11 @@ export default function Main() {
                 variant="contained"
                 color="primary"
                 startIcon={<AddIcon />}
-                disabled={!canJoinTournament || isPending || isConfirming}
+                disabled={!canJoinTournament || isPending || isConfirming || isParticipantsLoading || isRecoveryScoresLoading}
                 onClick={verifyAndJoinTournament}
               >
                 {isPending ? 'Confirming...' : isConfirming ? 'Processing...' : 'Join Tournament'}
               </Button>
-
             </Box>
             <Table>
               <TableHead>
@@ -309,27 +376,43 @@ export default function Main() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {users.sort((a, b) => b.recoveryScore - a.recoveryScore).map((user, index) => (
-                  <TableRow key={user.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                    <TableCell component="th" scope="row">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell>
-                      <Box display="flex" alignItems="center">
-                        <Avatar src={user.avatar} alt={user.name} sx={{ mr: 2 }} />
-                        {user.name}
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">{user.recoveryScore}</TableCell>
-                    <TableCell align="right">
-                      <Chip
-                        label={user.entered ? 'Entered' : 'Not Entered'}
-                        color={user.entered ? 'success' : 'default'}
-                        size="small"
-                      />
+                {isParticipantsLoading || isRecoveryScoresLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : isParticipantsError || isRecoveryScoresError ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      <Typography color="error">Failed to load leaderboard data.</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  participantsData
+                    .sort((a, b) => b.recoveryScore - a.recoveryScore)
+                    .map((participant, index) => (
+                      <TableRow key={participant.address} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                        <TableCell component="th" scope="row">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center">
+                            <Avatar src="/your-avatar-placeholder.svg" alt={participant.address} sx={{ mr: 2 }} />
+                            {participant.address.slice(0, 6)}...{participant.address.slice(-4)}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right">{participant.recoveryScore}</TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            label="Entered"
+                            color="success"
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
               </TableBody>
             </Table>
           </Paper>

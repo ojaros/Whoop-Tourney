@@ -1,4 +1,6 @@
-const contractABI = [
+import type { Abi } from 'abitype';
+
+const contractABI: Abi = [
 	{
 		"inputs": [],
 		"name": "determineWinner",
@@ -226,6 +228,6 @@ const contractABI = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-]
+] as const;
 
 export default contractABI
