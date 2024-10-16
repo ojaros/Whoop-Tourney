@@ -94,13 +94,16 @@ export default function Main() {
   const [prizePool, setPrizePool] = useState(0);
   const [participantsData, setParticipantsData] = useState<Participant[]>([]);
 
-  const { address, isConnected } = useAppKitAccount();
+  const { address, isConnected, caipAddress, status } = useAppKitAccount();
   const { data: hash, isPending, writeContractAsync } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
   const { data: contractBalance, isError: isBalanceError, isLoading: isBalanceLoading } = useBalance({
     address: contractAddress,
   });
+
+  console.log("Address: ", caipAddress)
+  console.log("Status: ", status)
 
   useEffect(() => {
     if (contractBalance) {
